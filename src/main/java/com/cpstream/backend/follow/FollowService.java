@@ -1,5 +1,6 @@
 package com.cpstream.backend.follow;
 
+import com.cpstream.backend.block.BlockRepository;
 import com.cpstream.backend.user.User;
 import com.cpstream.backend.user.UserRepository;
 import com.cpstream.backend.user.UserResponse;
@@ -14,10 +15,11 @@ public class FollowService {
 
     private final FollowRepository followRepository;
     private final UserRepository userRepository;
+    private final BlockRepository blockRepository;
 
     public String followUser(String viewerId, String targetUserId) {
 
-        if(viewerId.equals(targetUserId)) {
+        if (viewerId.equals(targetUserId)) {
             throw new RuntimeException("You cannot follow yourself");
         }
 
@@ -27,7 +29,11 @@ public class FollowService {
         User target = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new RuntimeException("Target user not found"));
 
-        if(followRepository.existsByFollowerAndFollowing(viewer, target)) {
+        if (isBlockedEitherWay(viewer, target)) {
+            throw new RuntimeException("Cannot follow this user");
+        }
+
+        if (followRepository.existsByFollowerAndFollowing(viewer, target)) {
             throw new RuntimeException("Already following");
         }
 
@@ -73,6 +79,10 @@ public class FollowService {
         User target = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new RuntimeException("Target user not found"));
 
+        if (isBlockedEitherWay(viewer, target)) {
+            return false;
+        }
+
         return followRepository.existsByFollowerAndFollowing(viewer, target);
     }
 
@@ -83,8 +93,15 @@ public class FollowService {
 
         return followRepository.findByFollower(viewer)
                 .stream()
-                .map(follow -> mapToResponse(follow.getFollowing()))
+                .map(Follow::getFollowing)
+                .filter(user -> !isBlockedEitherWay(viewer, user))
+                .map(this::mapToResponse)
                 .toList();
+    }
+
+    private boolean isBlockedEitherWay(User viewer, User target) {
+        return blockRepository.existsByBlockerAndBlocked(viewer, target)
+                || blockRepository.existsByBlockerAndBlocked(target, viewer);
     }
 
     private UserResponse mapToResponse(User user) {

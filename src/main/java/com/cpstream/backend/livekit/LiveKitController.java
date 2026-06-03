@@ -23,4 +23,8 @@ public class LiveKitController {
 public String handleWebhook(@RequestBody LiveKitWebhookRequest request) {
     return liveKitService.handleWebhook(request);
 }
+@DeleteMapping("/ingress/{ingressId}")
+public String deleteIngress(@PathVariable String ingressId) throws Exception {
+    return liveKitService.deleteIngress(ingressId);
+}
 }

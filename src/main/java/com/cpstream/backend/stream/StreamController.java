@@ -13,28 +13,41 @@ public class StreamController {
     private final StreamService streamService;
 
     @GetMapping
-    public List<StreamResponse> getAllStreams() {
-        return streamService.getAllStreams();
+    public List<StreamResponse> getAllStreams(
+            @RequestParam(required = false) String viewerId
+    ) {
+        return streamService.getAllStreams(viewerId);
     }
 
     @GetMapping("/live")
-    public List<StreamResponse> getLiveStreams() {
-        return streamService.getLiveStreams();
+    public List<StreamResponse> getLiveStreams(
+            @RequestParam(required = false) String viewerId
+    ) {
+        return streamService.getLiveStreams(viewerId);
     }
 
     @GetMapping("/search")
-    public List<StreamResponse> searchStreams(@RequestParam String term) {
-        return streamService.searchStreams(term);
+    public List<StreamResponse> searchStreams(
+            @RequestParam String term,
+            @RequestParam(required = false) String viewerId
+    ) {
+        return streamService.searchStreams(term, viewerId);
     }
+
     @PatchMapping("/{streamId}")
-public StreamResponse updateStream(
-        @PathVariable String streamId,
-        @RequestBody StreamUpdateRequest request
-) {
-    return streamService.updateStream(streamId, request);
-}
-@GetMapping("/user/{username}")
-public StreamResponse getStreamByUsername(@PathVariable String username) {
-    return streamService.getStreamByUsername(username);
+    public StreamResponse updateStream(
+            @PathVariable String streamId,
+            @RequestBody StreamUpdateRequest request
+    ) {
+        return streamService.updateStream(streamId, request);
+    }
+
+    @GetMapping("/user/{username}")
+    public StreamResponse getStreamByUsername(@PathVariable String username) {
+        return streamService.getStreamByUsername(username);
+    }
+    @GetMapping("/user/{username}/keys")
+public StreamKeysResponse getStreamKeysByUsername(@PathVariable String username) {
+    return streamService.getStreamKeysByUsername(username);
 }
 }

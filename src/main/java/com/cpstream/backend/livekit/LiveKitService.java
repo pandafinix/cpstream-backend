@@ -98,10 +98,22 @@ public class LiveKitService {
             participantName,
             LivekitIngress.IngressInput.RTMP_INPUT
     ).execute();
+if (!response.isSuccessful() || response.body() == null) {
+    String errorBody = "";
 
-    if (!response.isSuccessful() || response.body() == null) {
-        throw new RuntimeException("Failed to create ingress");
+    if (response.errorBody() != null) {
+        errorBody = response.errorBody().string();
     }
+
+    throw new RuntimeException(
+            "Failed to create ingress. LiveKit status: "
+                    + response.code()
+                    + " "
+                    + response.message()
+                    + " "
+                    + errorBody
+    );
+}
 
     LivekitIngress.IngressInfo ingress = response.body();
 
@@ -158,5 +170,42 @@ public class LiveKitService {
     }
 
     return "Webhook received but no action taken";
+}
+public String deleteIngress(String ingressId) throws Exception {
+
+    if (ingressId == null || ingressId.isBlank()) {
+        throw new RuntimeException("Ingress id is required");
+    }
+
+    String apiUrl = wsUrl
+            .replace("wss://", "https://")
+            .replace("ws://", "http://");
+
+    IngressServiceClient ingressClient = IngressServiceClient.create(
+            apiUrl,
+            apiKey,
+            apiSecret
+    );
+
+    Response<?> response = ingressClient.deleteIngress(ingressId).execute();
+
+    if (!response.isSuccessful()) {
+        String errorBody = "";
+
+        if (response.errorBody() != null) {
+            errorBody = response.errorBody().string();
+        }
+
+        throw new RuntimeException(
+                "Failed to delete ingress. LiveKit status: "
+                        + response.code()
+                        + " "
+                        + response.message()
+                        + " "
+                        + errorBody
+        );
+    }
+
+    return "Ingress deleted successfully";
 }
 }

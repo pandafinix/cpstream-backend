@@ -1,5 +1,7 @@
 package com.cpstream.backend.block;
 
+import com.cpstream.backend.follow.Follow;
+import com.cpstream.backend.follow.FollowRepository;
 import com.cpstream.backend.user.User;
 import com.cpstream.backend.user.UserRepository;
 import com.cpstream.backend.user.UserResponse;
@@ -14,6 +16,7 @@ public class BlockService {
 
     private final BlockRepository blockRepository;
     private final UserRepository userRepository;
+    private final FollowRepository followRepository;
 
     public String blockUser(String viewerId, String targetUserId) {
 
@@ -27,8 +30,11 @@ public class BlockService {
         User target = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new RuntimeException("Target user not found"));
 
+        removeFollowIfExists(viewer, target);
+        removeFollowIfExists(target, viewer);
+
         if (blockRepository.existsByBlockerAndBlocked(viewer, target)) {
-            throw new RuntimeException("Already blocked");
+            return "Blocked successfully";
         }
 
         Block block = Block.builder()
@@ -65,7 +71,8 @@ public class BlockService {
         User target = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new RuntimeException("Target user not found"));
 
-        return blockRepository.existsByBlockerAndBlocked(viewer, target);
+        return blockRepository.existsByBlockerAndBlocked(viewer, target)
+                || blockRepository.existsByBlockerAndBlocked(target, viewer);
     }
 
     public List<UserResponse> getBlockedUsers(String viewerId) {
@@ -77,6 +84,15 @@ public class BlockService {
                 .stream()
                 .map(block -> mapToResponse(block.getBlocked()))
                 .toList();
+    }
+
+    private void removeFollowIfExists(User follower, User following) {
+        Follow follow = followRepository.findByFollowerAndFollowing(follower, following)
+                .orElse(null);
+
+        if (follow != null) {
+            followRepository.delete(follow);
+        }
     }
 
     private UserResponse mapToResponse(User user) {

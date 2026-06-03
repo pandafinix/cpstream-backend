@@ -16,6 +16,13 @@ public class UserController {
     public UserResponse syncUser(@RequestBody UserSyncRequest request) {
         return userService.syncUser(request);
     }
+    @PatchMapping("/{userId}/bio")
+public UserResponse updateBio(
+        @PathVariable String userId,
+        @RequestBody UserUpdateBioRequest request
+) {
+    return userService.updateBio(userId, request);
+}
 
     @GetMapping("/recommended")
     public List<UserResponse> getRecommendedUsers(

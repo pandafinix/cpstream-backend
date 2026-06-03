@@ -151,6 +151,27 @@ public UserResponse updateUsername(String userId, UserUpdateUsernameRequest requ
 
     return mapToResponse(user);
 }
+public UserResponse updateBio(String userId, UserUpdateBioRequest request) {
+
+    User user = userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+
+    String bio = request.getBio();
+
+    if (bio != null) {
+        bio = bio.trim();
+    }
+
+    if (bio != null && bio.length() > 500) {
+        throw new RuntimeException("Bio must be at most 500 characters");
+    }
+
+    user.setBio(bio == null ? "" : bio);
+
+    user = userRepository.save(user);
+
+    return mapToResponse(user);
+}
 public List<UserResponse> searchUsers(String term) {
 
     if (term == null || term.isBlank()) {

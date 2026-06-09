@@ -15,6 +15,8 @@ public interface StreamRepository extends JpaRepository<Stream, String> {
 
     Optional<Stream> findByUserUsername(String username);
 
+    Optional<Stream> findByIngressId(String ingressId);
+
     @Query("""
             SELECT s FROM Stream s
             JOIN s.user u

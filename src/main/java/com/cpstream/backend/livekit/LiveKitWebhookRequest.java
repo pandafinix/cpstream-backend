@@ -19,6 +19,7 @@ public class LiveKitWebhookRequest {
     @Setter
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Room {
+
         private String name;
     }
 
@@ -26,6 +27,9 @@ public class LiveKitWebhookRequest {
     @Setter
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class IngressInfo {
+
+        private String ingressId;
+
         private String roomName;
     }
 }

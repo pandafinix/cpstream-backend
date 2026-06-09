@@ -70,50 +70,84 @@ public class LiveKitService {
                 .build();
     }
 
-    public String handleWebhook(LiveKitWebhookRequest request) {
+   public String handleWebhook(LiveKitWebhookRequest request) {
 
-        String event = request.getEvent();
+    String event = request.getEvent();
+
+    Stream stream = null;
+
+    /*
+     * First identify the stream using ingressId.
+     * ingressId remains stable even if the username changes.
+     */
+    if (request.getIngressInfo() != null
+            && request.getIngressInfo().getIngressId() != null
+            && !request.getIngressInfo().getIngressId().isBlank()) {
+
+        stream = streamRepository
+                .findByIngressId(
+                        request.getIngressInfo().getIngressId()
+                )
+                .orElse(null);
+    }
+
+    /*
+     * Fallback for room events that may not contain ingressId.
+     */
+    if (stream == null) {
+
         String roomName = null;
 
         if (request.getIngressInfo() != null
                 && request.getIngressInfo().getRoomName() != null) {
 
-            roomName = request.getIngressInfo().getRoomName();
+            roomName =
+                    request.getIngressInfo().getRoomName();
 
         } else if (request.getRoom() != null
                 && request.getRoom().getName() != null) {
 
-            roomName = request.getRoom().getName();
+            roomName =
+                    request.getRoom().getName();
         }
 
-        if (roomName == null) {
-            return "Webhook received but room name not found";
+        if (roomName != null) {
+            stream = streamRepository
+                    .findByUserUsername(roomName)
+                    .orElse(null);
         }
-
-        Stream stream = streamRepository.findByUserUsername(roomName)
-                .orElseThrow(() -> new RuntimeException("Stream not found"));
-
-        if ("ingress_started".equals(event)) {
-            stream.setLive(true);
-            streamRepository.save(stream);
-            return "Stream marked live";
-        }
-
-        if ("ingress_ended".equals(event)) {
-            stream.setLive(false);
-            streamRepository.save(stream);
-            return "Stream marked offline";
-        }
-
-        if ("room_finished".equals(event)) {
-            stream.setLive(false);
-            streamRepository.save(stream);
-            return "Room finished, stream marked offline";
-        }
-
-        return "Webhook received but no action taken";
     }
 
+    if (stream == null) {
+        return "Webhook received but stream not found";
+    }
+
+    if ("ingress_started".equals(event)) {
+
+        stream.setLive(true);
+        streamRepository.save(stream);
+
+        return "Stream marked live";
+    }
+
+    if ("ingress_ended".equals(event)) {
+
+        stream.setLive(false);
+        streamRepository.save(stream);
+
+        return "Stream marked offline";
+    }
+
+    if ("room_finished".equals(event)) {
+
+        stream.setLive(false);
+        streamRepository.save(stream);
+
+        return "Room finished, stream marked offline";
+    }
+
+    return "Webhook received but no action taken";
+}
     @Transactional
     public LiveKitIngressResponse createIngress(
             LiveKitIngressRequest request,

@@ -11,8 +11,6 @@ public class StreamUpdateRequest {
 
     private String thumbnailUrl;
 
-    private Boolean isLive;
-
     private Boolean isChatEnabled;
 
     private Boolean isChatDelayed;

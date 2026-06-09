@@ -40,6 +40,16 @@ public class SecurityConfig {
                                 "/api/livekit/ingress/**"
                         ).authenticated()
 
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/streams/user/*/keys"
+                        ).authenticated()
+
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/streams/**"
+                        ).authenticated()
+
                         .anyRequest().permitAll()
                 )
                 .oauth2ResourceServer(oauth2 ->

@@ -1,6 +1,8 @@
 package com.cpstream.backend.stream;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -37,17 +39,31 @@ public class StreamController {
     @PatchMapping("/{streamId}")
     public StreamResponse updateStream(
             @PathVariable String streamId,
-            @RequestBody StreamUpdateRequest request
+            @RequestBody StreamUpdateRequest request,
+            @AuthenticationPrincipal Jwt jwt
     ) {
-        return streamService.updateStream(streamId, request);
+        return streamService.updateStream(
+                streamId,
+                request,
+                jwt.getSubject()
+        );
     }
 
     @GetMapping("/user/{username}")
-    public StreamResponse getStreamByUsername(@PathVariable String username) {
+    public StreamResponse getStreamByUsername(
+            @PathVariable String username
+    ) {
         return streamService.getStreamByUsername(username);
     }
+
     @GetMapping("/user/{username}/keys")
-public StreamKeysResponse getStreamKeysByUsername(@PathVariable String username) {
-    return streamService.getStreamKeysByUsername(username);
-}
+    public StreamKeysResponse getStreamKeysByUsername(
+            @PathVariable String username,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return streamService.getStreamKeysByUsername(
+                username,
+                jwt.getSubject()
+        );
+    }
 }

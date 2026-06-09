@@ -5,7 +5,10 @@ import com.cpstream.backend.block.BlockRepository;
 import com.cpstream.backend.user.User;
 import com.cpstream.backend.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashSet;
 import java.util.List;
@@ -38,34 +41,62 @@ public class StreamService {
     }
 
     public List<StreamResponse> getAllStreams(String viewerId) {
-        return filterBlockedStreams(streamRepository.findAll(), viewerId)
+        return filterBlockedStreams(
+                streamRepository.findAll(),
+                viewerId
+        )
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
     public List<StreamResponse> getLiveStreams(String viewerId) {
-        return filterBlockedStreams(streamRepository.findByIsLiveTrue(), viewerId)
+        return filterBlockedStreams(
+                streamRepository.findByIsLiveTrue(),
+                viewerId
+        )
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
-    public List<StreamResponse> searchStreams(String term, String viewerId) {
+    public List<StreamResponse> searchStreams(
+            String term,
+            String viewerId
+    ) {
         if (term == null || term.isBlank()) {
             return List.of();
         }
 
-        return filterBlockedStreams(streamRepository.searchStreams(term.trim()), viewerId)
+        return filterBlockedStreams(
+                streamRepository.searchStreams(term.trim()),
+                viewerId
+        )
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
-    public StreamResponse updateStream(String streamId, StreamUpdateRequest request) {
-
+    @Transactional
+    public StreamResponse updateStream(
+            String streamId,
+            StreamUpdateRequest request,
+            String externalUserId
+    ) {
         Stream stream = streamRepository.findById(streamId)
-                .orElseThrow(() -> new RuntimeException("Stream not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Stream not found"
+                ));
+
+        if (!externalUserId.equals(
+                stream.getUser().getExternalUserId()
+        )) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You do not own this stream"
+            );
+        }
 
         if (request.getName() != null) {
             stream.setName(request.getName());
@@ -75,9 +106,10 @@ public class StreamService {
             stream.setThumbnailUrl(request.getThumbnailUrl());
         }
 
-        if (request.getIsLive() != null) {
-            stream.setLive(request.getIsLive());
-        }
+        /*
+         * isLive is intentionally not updated here.
+         * Only the LiveKit webhook should change live status.
+         */
 
         if (request.getIsChatEnabled() != null) {
             stream.setChatEnabled(request.getIsChatEnabled());
@@ -88,7 +120,9 @@ public class StreamService {
         }
 
         if (request.getIsChatFollowersOnly() != null) {
-            stream.setChatFollowersOnly(request.getIsChatFollowersOnly());
+            stream.setChatFollowersOnly(
+                    request.getIsChatFollowersOnly()
+            );
         }
 
         if (request.getPlatform() != null) {
@@ -109,32 +143,57 @@ public class StreamService {
     }
 
     public StreamResponse getStreamByUsername(String username) {
-
-        Stream stream = streamRepository.findByUserUsername(username)
-                .orElseThrow(() -> new RuntimeException("Stream not found"));
+        Stream stream = streamRepository
+                .findByUserUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Stream not found"
+                ));
 
         return mapToResponse(stream);
     }
-    public StreamKeysResponse getStreamKeysByUsername(String username) {
 
-    Stream stream = streamRepository.findByUserUsername(username)
-            .orElseThrow(() -> new RuntimeException("Stream not found"));
+    @Transactional(readOnly = true)
+    public StreamKeysResponse getStreamKeysByUsername(
+            String username,
+            String externalUserId
+    ) {
+        Stream stream = streamRepository
+                .findByUserUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Stream not found"
+                ));
 
-    return StreamKeysResponse.builder()
-            .id(stream.getId())
-            .ingressId(stream.getIngressId())
-            .serverUrl(stream.getServerUrl())
-            .streamKey(stream.getStreamKey())
-            .username(stream.getUser().getUsername())
-            .build();
-}
+        if (!externalUserId.equals(
+                stream.getUser().getExternalUserId()
+        )) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You do not own this stream"
+            );
+        }
 
-    private List<Stream> filterBlockedStreams(List<Stream> streams, String viewerId) {
+        return StreamKeysResponse.builder()
+                .id(stream.getId())
+                .ingressId(stream.getIngressId())
+                .serverUrl(stream.getServerUrl())
+                .streamKey(stream.getStreamKey())
+                .username(stream.getUser().getUsername())
+                .build();
+    }
+
+    private List<Stream> filterBlockedStreams(
+            List<Stream> streams,
+            String viewerId
+    ) {
         if (viewerId == null || viewerId.isBlank()) {
             return streams;
         }
 
-        User viewer = userRepository.findById(viewerId).orElse(null);
+        User viewer = userRepository
+                .findById(viewerId)
+                .orElse(null);
 
         if (viewer == null) {
             return streams;
@@ -142,18 +201,30 @@ public class StreamService {
 
         Set<String> blockedUserIds = new HashSet<>();
 
-        List<Block> blockedByMe = blockRepository.findByBlocker(viewer);
+        List<Block> blockedByMe =
+                blockRepository.findByBlocker(viewer);
+
         for (Block block : blockedByMe) {
-            blockedUserIds.add(block.getBlocked().getId());
+            blockedUserIds.add(
+                    block.getBlocked().getId()
+            );
         }
 
-        List<Block> blockedMe = blockRepository.findByBlocked(viewer);
+        List<Block> blockedMe =
+                blockRepository.findByBlocked(viewer);
+
         for (Block block : blockedMe) {
-            blockedUserIds.add(block.getBlocker().getId());
+            blockedUserIds.add(
+                    block.getBlocker().getId()
+            );
         }
 
         return streams.stream()
-                .filter(stream -> !blockedUserIds.contains(stream.getUser().getId()))
+                .filter(stream ->
+                        !blockedUserIds.contains(
+                                stream.getUser().getId()
+                        )
+                )
                 .toList();
     }
 }

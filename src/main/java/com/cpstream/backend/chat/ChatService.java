@@ -18,10 +18,10 @@ public class ChatService {
     private final ChatMessageRepository chatMessageRepository;
     private final StringRedisTemplate redisTemplate;
 
-    @Value("${chat.rate-limit.window-seconds}")
+    @Value("${chat.rate-limit.window-seconds:10}")
     private long windowSeconds;
 
-    @Value("${chat.rate-limit.max-messages}")
+  @Value("${chat.rate-limit.max-messages:5}")
     private long maxMessages;
 
     public ChatMessageResponse saveMessage(ChatMessageRequest request) {

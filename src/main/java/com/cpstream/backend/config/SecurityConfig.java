@@ -1,5 +1,6 @@
 package com.cpstream.backend.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -15,6 +16,9 @@ import java.util.List;
 @Configuration
 public class SecurityConfig {
 
+    @Value("${frontend.url:http://localhost:3000}")
+    private String frontendUrl;
+
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http
@@ -28,6 +32,11 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.OPTIONS,
                                 "/**"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/livekit/webhook"
                         ).permitAll()
 
                         .requestMatchers(
@@ -66,7 +75,8 @@ public class SecurityConfig {
 
         config.setAllowedOrigins(List.of(
                 "http://localhost:3000",
-                "http://127.0.0.1:3000"
+                "http://127.0.0.1:3000",
+                frontendUrl
         ));
 
         config.setAllowedMethods(List.of(

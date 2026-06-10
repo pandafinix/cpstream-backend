@@ -73,11 +73,12 @@ public class SecurityConfig {
 
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOrigins(List.of(
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                frontendUrl
-        ));
+       config.setAllowedOriginPatterns(List.of(
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://cpstream-frontend.vercel.app",
+    "https://*.vercel.app"
+));
 
         config.setAllowedMethods(List.of(
                 "GET",

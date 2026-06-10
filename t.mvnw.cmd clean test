@@ -1,0 +1,17 @@
+[1mdiff --git a/src/main/java/com/cpstream/backend/chat/ChatService.java b/src/main/java/com/cpstream/backend/chat/ChatService.java[m
+[1mindex 8369e74..fe7f6f2 100644[m
+[1m--- a/src/main/java/com/cpstream/backend/chat/ChatService.java[m
+[1m+++ b/src/main/java/com/cpstream/backend/chat/ChatService.java[m
+[36m@@ -18,10 +18,10 @@[m [mpublic class ChatService {[m
+     private final ChatMessageRepository chatMessageRepository;[m
+     private final StringRedisTemplate redisTemplate;[m
+ [m
+[31m-    @Value("${chat.rate-limit.window-seconds}")[m
+[32m+[m[32m    @Value("${chat.rate-limit.window-seconds:10}")[m
+     private long windowSeconds;[m
+ [m
+[31m-    @Value("${chat.rate-limit.max-messages}")[m
+[32m+[m[32m  @Value("${chat.rate-limit.max-messages:5}")[m
+     private long maxMessages;[m
+ [m
+     public ChatMessageResponse saveMessage(ChatMessageRequest request) {[m

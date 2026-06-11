@@ -37,7 +37,9 @@ public class LiveKitService {
     @Value("${livekit.ws-url}")
     private String wsUrl;
 
-    public LiveKitTokenResponse createToken(LiveKitTokenRequest request) {
+    public LiveKitTokenResponse createToken(
+            LiveKitTokenRequest request
+    ) {
 
         SecretKey key = Keys.hmacShaKeyFor(
                 apiSecret.getBytes(StandardCharsets.UTF_8)
@@ -48,7 +50,10 @@ public class LiveKitService {
         videoGrant.put("roomJoin", true);
         videoGrant.put("room", request.getRoomName());
         videoGrant.put("canSubscribe", true);
-        videoGrant.put("canPublish", request.isCanPublish());
+        videoGrant.put(
+                "canPublish",
+                request.isCanPublish()
+        );
         videoGrant.put("canPublishData", true);
 
         Instant now = Instant.now();
@@ -60,7 +65,11 @@ public class LiveKitService {
                 .claim("name", request.getName())
                 .claim("video", videoGrant)
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plusSeconds(60 * 60 * 6)))
+                .expiration(
+                        Date.from(
+                                now.plusSeconds(60 * 60 * 6)
+                        )
+                )
                 .signWith(key)
                 .compact();
 
@@ -70,84 +79,96 @@ public class LiveKitService {
                 .build();
     }
 
-   public String handleWebhook(LiveKitWebhookRequest request) {
+    @Transactional
+    public String handleWebhook(
+            LiveKitWebhookRequest request
+    ) {
 
-    String event = request.getEvent();
-
-    Stream stream = null;
-
-    /*
-     * First identify the stream using ingressId.
-     * ingressId remains stable even if the username changes.
-     */
-    if (request.getIngressInfo() != null
-            && request.getIngressInfo().getIngressId() != null
-            && !request.getIngressInfo().getIngressId().isBlank()) {
-
-        stream = streamRepository
-                .findByIngressId(
-                        request.getIngressInfo().getIngressId()
-                )
-                .orElse(null);
-    }
-
-    /*
-     * Fallback for room events that may not contain ingressId.
-     */
-    if (stream == null) {
-
-        String roomName = null;
-
-        if (request.getIngressInfo() != null
-                && request.getIngressInfo().getRoomName() != null) {
-
-            roomName =
-                    request.getIngressInfo().getRoomName();
-
-        } else if (request.getRoom() != null
-                && request.getRoom().getName() != null) {
-
-            roomName =
-                    request.getRoom().getName();
+        if (request == null) {
+            return "Webhook ignored: empty request";
         }
 
-        if (roomName != null) {
-            stream = streamRepository
-                    .findByUserUsername(roomName)
-                    .orElse(null);
+        String event = request.getEvent();
+        Stream stream = null;
+
+        /*
+         * Prefer ingressId because it remains stable.
+         */
+        if (request.getIngressInfo() != null) {
+
+            String ingressId =
+                    request.getIngressInfo()
+                            .getIngressId();
+
+            if (ingressId != null
+                    && !ingressId.isBlank()) {
+
+                stream = streamRepository
+                        .findByIngressId(ingressId)
+                        .orElse(null);
+            }
         }
+
+        /*
+         * Fallback to room name for room events
+         * or test events without an ingressId.
+         */
+        if (stream == null) {
+
+            String roomName = null;
+
+            if (request.getIngressInfo() != null) {
+                roomName = request
+                        .getIngressInfo()
+                        .getRoomName();
+            }
+
+            if ((roomName == null
+                    || roomName.isBlank())
+                    && request.getRoom() != null) {
+
+                roomName = request
+                        .getRoom()
+                        .getName();
+            }
+
+            if (roomName != null
+                    && !roomName.isBlank()) {
+
+                stream = streamRepository
+                        .findByUserUsername(roomName)
+                        .orElse(null);
+            }
+        }
+
+        /*
+         * LiveKit test events may use a dummy room.
+         * Return normally so the endpoint responds 200.
+         */
+        if (stream == null) {
+            return "Webhook ignored: no matching stream";
+        }
+
+        if ("ingress_started".equals(event)) {
+
+            stream.setLive(true);
+            streamRepository.save(stream);
+
+            return "Stream marked live";
+        }
+
+        if ("ingress_ended".equals(event)
+                || "room_finished".equals(event)) {
+
+            stream.setLive(false);
+            streamRepository.save(stream);
+
+            return "Stream marked offline";
+        }
+
+        return "Webhook received but no action taken";
     }
 
-    if (stream == null) {
-        return "Webhook received but stream not found";
-    }
-
-    if ("ingress_started".equals(event)) {
-
-        stream.setLive(true);
-        streamRepository.save(stream);
-
-        return "Stream marked live";
-    }
-
-    if ("ingress_ended".equals(event)) {
-
-        stream.setLive(false);
-        streamRepository.save(stream);
-
-        return "Stream marked offline";
-    }
-
-    if ("room_finished".equals(event)) {
-
-        stream.setLive(false);
-        streamRepository.save(stream);
-
-        return "Room finished, stream marked offline";
-    }
-
-    return "Webhook received but no action taken";
-}
     @Transactional
     public LiveKitIngressResponse createIngress(
             LiveKitIngressRequest request,
@@ -164,15 +185,21 @@ public class LiveKitService {
         }
 
         Stream stream = streamRepository
-                .findByUserUsername(request.getUsername())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Stream not found"
-                ));
+                .findByUserUsername(
+                        request.getUsername()
+                )
+                .orElseThrow(
+                        () -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Stream not found"
+                        )
+                );
 
         if (!externalUserId.equals(
-                stream.getUser().getExternalUserId()
+                stream.getUser()
+                        .getExternalUserId()
         )) {
+
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "You do not own this stream"
@@ -180,14 +207,18 @@ public class LiveKitService {
         }
 
         boolean connectionAlreadyExists =
-                stream.getIngressId() != null &&
-                !stream.getIngressId().isBlank() &&
-                stream.getServerUrl() != null &&
-                !stream.getServerUrl().isBlank() &&
-                stream.getStreamKey() != null &&
-                !stream.getStreamKey().isBlank();
+                stream.getIngressId() != null
+                        && !stream.getIngressId()
+                        .isBlank()
+                        && stream.getServerUrl() != null
+                        && !stream.getServerUrl()
+                        .isBlank()
+                        && stream.getStreamKey() != null
+                        && !stream.getStreamKey()
+                        .isBlank();
 
         if (connectionAlreadyExists) {
+
             return LiveKitIngressResponse.builder()
                     .ingressId(stream.getIngressId())
                     .serverUrl(stream.getServerUrl())
@@ -197,9 +228,12 @@ public class LiveKitService {
         }
 
         String roomName = request.getUsername();
+
         String participantIdentity =
                 request.getUsername() + "-host";
-        String participantName = request.getUsername();
+
+        String participantName =
+                request.getUsername();
 
         String apiUrl = wsUrl
                 .replace("wss://", "https://")
@@ -214,11 +248,13 @@ public class LiveKitService {
 
         Response<LivekitIngress.IngressInfo> response =
                 ingressClient.createIngress(
-                        request.getUsername() + " ingress",
+                        request.getUsername()
+                                + " ingress",
                         roomName,
                         participantIdentity,
                         participantName,
-                        LivekitIngress.IngressInput.RTMP_INPUT
+                        LivekitIngress.IngressInput
+                                .RTMP_INPUT
                 ).execute();
 
         if (!response.isSuccessful()
@@ -227,11 +263,14 @@ public class LiveKitService {
             String errorBody = "";
 
             if (response.errorBody() != null) {
-                errorBody = response.errorBody().string();
+                errorBody = response
+                        .errorBody()
+                        .string();
             }
 
             throw new RuntimeException(
-                    "Failed to create ingress. LiveKit status: "
+                    "Failed to create ingress. "
+                            + "LiveKit status: "
                             + response.code()
                             + " "
                             + response.message()
@@ -240,19 +279,32 @@ public class LiveKitService {
             );
         }
 
-        LivekitIngress.IngressInfo ingress = response.body();
+        LivekitIngress.IngressInfo ingress =
+                response.body();
 
-        stream.setIngressId(ingress.getIngressId());
-        stream.setServerUrl(ingress.getUrl());
-        stream.setStreamKey(ingress.getStreamKey());
+        stream.setIngressId(
+                ingress.getIngressId()
+        );
+        stream.setServerUrl(
+                ingress.getUrl()
+        );
+        stream.setStreamKey(
+                ingress.getStreamKey()
+        );
         stream.setLive(false);
 
         streamRepository.save(stream);
 
         return LiveKitIngressResponse.builder()
-                .ingressId(ingress.getIngressId())
-                .serverUrl(ingress.getUrl())
-                .streamKey(ingress.getStreamKey())
+                .ingressId(
+                        ingress.getIngressId()
+                )
+                .serverUrl(
+                        ingress.getUrl()
+                )
+                .streamKey(
+                        ingress.getStreamKey()
+                )
                 .roomName(roomName)
                 .build();
     }
@@ -263,7 +315,9 @@ public class LiveKitService {
             String externalUserId
     ) throws Exception {
 
-        if (ingressId == null || ingressId.isBlank()) {
+        if (ingressId == null
+                || ingressId.isBlank()) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Ingress id is required"
@@ -272,14 +326,18 @@ public class LiveKitService {
 
         Stream stream = streamRepository
                 .findByIngressId(ingressId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Ingress not found"
-                ));
+                .orElseThrow(
+                        () -> new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Ingress not found"
+                        )
+                );
 
         if (!externalUserId.equals(
-                stream.getUser().getExternalUserId()
+                stream.getUser()
+                        .getExternalUserId()
         )) {
+
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "You do not own this ingress"
@@ -298,18 +356,23 @@ public class LiveKitService {
                 );
 
         Response<?> response =
-                ingressClient.deleteIngress(ingressId).execute();
+                ingressClient
+                        .deleteIngress(ingressId)
+                        .execute();
 
         if (!response.isSuccessful()) {
 
             String errorBody = "";
 
             if (response.errorBody() != null) {
-                errorBody = response.errorBody().string();
+                errorBody = response
+                        .errorBody()
+                        .string();
             }
 
             throw new RuntimeException(
-                    "Failed to delete ingress. LiveKit status: "
+                    "Failed to delete ingress. "
+                            + "LiveKit status: "
                             + response.code()
                             + " "
                             + response.message()
